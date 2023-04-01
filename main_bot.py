@@ -120,12 +120,22 @@ def PlayWindow():
     markup.add(item4)
     markup.add(item5)
     return markup
-def Goroda(message):
+def Goroda(message, last_bykva=None):
+    ban = ['ь', 'й', 'ы', 'ъ']
+    if last_bykva == None:
+        last_bykva = message.text[0]
     for i in rooms_gorod:
         if message.chat.id in i:
-            mess2 = bot.send_message(i[i.index(message.chat.id) - 2], message.text)
-            bot.register_next_step_handler(mess2, Goroda)
-            break
+            if last_bykva.lower() == message.text[0].lower():
+                mess2 = bot.send_message(i[i.index(message.chat.id) - 2], message.text)
+                if mess2.text[-1] in ban:
+                    last_bykva = mess2.text[-2]
+                else:
+                    last_bykva = mess2.text[-1]
+                bot.register_next_step_handler(mess2, Goroda, last_bykva)
+                break
+            else:
+                bot.register_next_step_handler(message, Goroda, last_bykva)
 
 def login(message):
     message_text = (message.text).split()
