@@ -1,6 +1,7 @@
 import telebot
 from telebot import types
 import sqlite3
+import requests
 
 token = '6162234981:AAFFNXWvL5Kn4vxG8muF1s3AXwFK4CA2pDo'
 bot = telebot.TeleBot(token)
@@ -125,8 +126,24 @@ def Goroda(message, last_bykva=None):
     if last_bykva == None:
         last_bykva = message.text[0]
     for i in rooms_gorod:
+        toponym_address = ""
         if message.chat.id in i:
-            if last_bykva.lower() == message.text[0].lower():
+            geocoder_request = f"http://geocode-maps.yandex.ru/1.x/?apikey=40d1649f-0493-4b70-98ba-98533de7710b&geocode='{message.text}',+1&format=json"
+            response = requests.get(geocoder_request)
+            try:
+
+                if response:
+                    json_response = response.json()
+                    toponym = json_response["response"]["GeoObjectCollection"]["featureMember"][0]["GeoObject"]
+                    toponym_address = toponym["metaDataProperty"]["GeocoderMetaData"]["kind"]
+
+            except IndexError:
+                bot.register_next_step_handler(message, Goroda, last_bykva)
+                bot.send_message(message.chat.id,
+                                 "ошибка, проверьте правильно ли вы ввели название города. 1")
+                break
+            if last_bykva.lower() == message.text[0].lower() and toponym_address == "locality" and message.text not in i[1]:
+                i[1].append(message.text)
                 mess2 = bot.send_message(i[i.index(message.chat.id) - 2], message.text)
                 if mess2.text[-1] in ban:
                     last_bykva = mess2.text[-2]
@@ -136,6 +153,8 @@ def Goroda(message, last_bykva=None):
                 break
             else:
                 bot.register_next_step_handler(message, Goroda, last_bykva)
+                bot.send_message(message.chat.id, "ошибка, проверьте правильно ли вы ввели название города или же этот город уже использовался.")
+                break
 
 def login(message):
     message_text = (message.text).split()
