@@ -2,9 +2,13 @@ import telebot
 from telebot import types
 import sqlite3
 import requests
+from data import db_session
+from data.users import User
 
 token = '6162234981:AAFFNXWvL5Kn4vxG8muF1s3AXwFK4CA2pDo'
 bot = telebot.TeleBot(token)
+
+db_session.global_init("db/progress_bd.db")
 
 queue_gorod = list()
 rooms_gorod = list()
@@ -49,12 +53,12 @@ def message_reply(message):
                 bot.send_message(message.chat.id, "Выберите игру из выпадающего списка",reply_markup=markup)
 
             if message.text == "Профиль":
-                con = sqlite3.connect("progress_bd.db")
-                cur = con.cursor()
-                result = cur.execute(f"""SELECT * FROM progress WHERE login = '{id_login[message.chat.id]}'""").fetchone()
-                stroka = f"Имя: {result[1]}"
-                con.close()
-                bot.send_message(message.chat.id, stroka)
+                db_sess = db_session.create_session()
+                for user in db_sess.query(User).filter(User.login.like(id_login[message.chat.id])):
+                    stroka = f"Имя: {user.login}"
+                    str2 = f"ммр: {user.mmr}"
+                    bot.send_message(message.chat.id, stroka)
+                    bot.send_message(message.chat.id, str2)
 
             if message.text == "Выход":
                 id_login.pop(message.chat.id)
@@ -98,14 +102,6 @@ def message_reply(message):
                 markup = PlayWindow()
                 bot.send_message(message.chat.id, "Выберите игру из выпадающего списка", reply_markup=markup)
 
-            if message.text == "Сдаться в городах":
-                markup = PlayWindow()
-                bot.send_message(message.chat.id, "Вы проиграли", reply_markup=markup)
-                for i in rooms_gorod:
-                    if message.chat.id in i:
-                        bot.send_message(i[i.index(message.chat.id) - 2], "Вы выйграли", reply_markup=markup)
-                        rooms_gorod.remove(i)
-                        break
         else:
             bot.send_message(message.chat.id, "Вы ещё не зашли")
 def PlayWindow():
@@ -121,6 +117,7 @@ def PlayWindow():
     markup.add(item4)
     markup.add(item5)
     return markup
+
 def Goroda(message, last_bykva=None):
     ban = ['ь', 'й', 'ы', 'ъ']
     if last_bykva == None:
@@ -151,6 +148,21 @@ def Goroda(message, last_bykva=None):
                     last_bykva = mess2.text[-1]
                 bot.register_next_step_handler(mess2, Goroda, last_bykva)
                 break
+            elif message.text == "Сдаться в городах":
+                markup = PlayWindow()
+                db_sess = db_session.create_session()
+                bot.send_message(message.chat.id, "Вы проиграли", reply_markup=markup)
+                for user in db_sess.query(User).filter(User.login.like(id_login[message.chat.id])):
+                    user.mmr -= 10
+                    db_sess.commit()
+                for i in rooms_gorod:
+                    if message.chat.id in i:
+                        for user in db_sess.query(User).filter(User.login.like(id_login[i[i.index(message.chat.id) - 2]])):
+                            user.mmr += 10
+                            db_sess.commit()
+                        bot.send_message(i[i.index(message.chat.id) - 2], "Вы выйграли", reply_markup=markup)
+                        rooms_gorod.remove(i)
+                        break
             else:
                 bot.register_next_step_handler(message, Goroda, last_bykva)
                 bot.send_message(message.chat.id, "ошибка, проверьте правильно ли вы ввели название города или же этот город уже использовался.")
@@ -159,12 +171,9 @@ def Goroda(message, last_bykva=None):
 def login(message):
     message_text = (message.text).split()
     if len(message_text) == 2:
-        con = sqlite3.connect("progress_bd.db")
-        cur = con.cursor()
-        result = cur.execute(f"""SELECT * FROM progress WHERE login = '{message_text[0]}'""").fetchone()
-        con.close()
-        if result != None:
-            if message_text[0] == result[1] and str(result[2])== message_text[1]:
+        db_sess = db_session.create_session()
+        for user in db_sess.query(User).filter(User.login.like(message_text[0])):
+            if message_text[0] == user.login and user.password == message_text[1]:
                 markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
                 item1 = types.KeyboardButton("Играть")
                 item2 = types.KeyboardButton("Профиль")
@@ -176,6 +185,7 @@ def login(message):
                 id_login[message.chat.id] = message_text[0]
             else:
                 bot.send_message(message.chat.id, "Неправильный пароль")
+            break
         else:
             bot.send_message(message.chat.id, "Неправильный логин")
     else:
@@ -185,16 +195,18 @@ def login(message):
 def registration(message):
     message_text = (message.text).split()
     if len(message_text) == 3 and message_text[1] == message_text[2]:
-        con = sqlite3.connect("progress_bd.db")
-        cur = con.cursor()
-        if cur.execute(f"""SELECT * FROM progress WHERE login = '{message_text[0]}'""").fetchone() == None:
-            cur.execute(f"""INSERT INTO progress(login,password) VALUES ('{message_text[0]}', '{message_text[1]}')""")
-            con.commit()
-            con.close()
+        db_sess = db_session.create_session()
+        for user in db_sess.query(User).filter(User.login.like(message_text[0])):
+            bot.send_message(message.chat.id, "Такой логин уже занят")
+        else:
+            user = User()
+            user.login = message_text[0]
+            user.password = message_text[1]
+            user.mmr = 0
+            db_sess.add(user)
+            db_sess.commit()
             bot.send_message(message.chat.id,
                              f"Вы успешно зарегестрировались, ваш \nЛогин: {message_text[0]} \nПароль: {message_text[1]}")
-        else:
-            bot.send_message(message.chat.id, "Такой логин уже занят")
     else:
         bot.send_message(message.chat.id, "Неправильный формат ввода")
 
