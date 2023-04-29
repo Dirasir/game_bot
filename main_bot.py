@@ -28,6 +28,7 @@ def start_message(message):
 
 
 @bot.message_handler(content_types='text')
+@bot.message_handler(content_types=['photo'])
 def message_reply(message):
     if message.text == "Войти":
         if message.chat.id not in id_login.keys():
@@ -102,6 +103,12 @@ def message_reply(message):
                 markup = PlayWindow()
                 bot.send_message(message.chat.id, "Выберите игру из выпадающего списка", reply_markup=markup)
 
+            if message.text == "Шелли и Кольт":
+                bot.send_message(message.chat.id, "https://www.youtube.com/watch?v=PhzV2kodm0I")
+
+            if message.text == "Геншин импакт":
+                photo_url = "https://yandex.ru/images/search?from=tabbar&img_url=http://i.ytimg.com/vi/KIkww1il8Sg/maxresdefault.jpg&lr=239&pos=2&rpt=simage&text=аниме говно"
+                bot.send_photo(message.chat.id, photo=photo_url, caption="зря...")
         else:
             bot.send_message(message.chat.id, "Вы ещё не зашли")
 def PlayWindow():
